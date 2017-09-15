@@ -10,13 +10,13 @@ The codes are ready for use after being downloaded and decompressed as follows.
 --------------------------------------------------------------------------------------------
 
 TaxIO installation:
-> wget https://github.com/TLlab/taxio/blob/master/taxio-0.1.tar.gz
+> wget https://github.com/TLlab/taxio/raw/master/taxio-0.1.tar.gz
 > tar zxvf taxio-0.1.tar.gz
 # add the folder taxio-0.1/bin to $PATH
 # see below if reference sequences other than RDP training set is desired
 
 e-PCR installation:
-> wget ftp://ftp.ncbi.nlm.nih.gov/pub/schuler/e-PCR/e-PCR-2.3.11-x86_64-linux.tar.gz
+> cd taxio-0.1
 > tar zxvf e-PCR-2.3.11-x86_64-linux.tar.gz
 # add folder containing the executables to $PATH
 
