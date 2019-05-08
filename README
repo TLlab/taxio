@@ -1,0 +1,154 @@
+Inside-out concatenation of Illumina paired-end reads for classifying phylogenetic marker sequences
+
+Tsunglin Liu*, Cheng-Yu Chen, An Chen-Deng, Sheng-Jou Hung, Yung-I Hou, Jiu-Yao Wang
+
+
+1. Installation
+---------------------------------------------------------------------------------------------------------
+TaxIO is written in Perl and requires RDP Classifier and USEARCH. The codes are ready for use after
+being downloaded and decompressed as follows.
+---------------------------------------------------------------------------------------------------------
+
+TaxIO installation:
+
+>>> wget https://github.com/TLlab/taxio/raw/master/taxio-0.1.tar.gz
+>>> tar zxvf taxio-0.1.tar.gz
+# add the folder taxio-0.1/bin to $PATH
+# see below if reference sequences other than the RDP data is desired
+
+RDP classifier installation:
+
+>>> wget https://downloads.sourceforge.net/project/rdp-classifier/rdp-classifier/rdp_classifier_2.12.zip
+>>> unzip rdp_classifier_2.12.zip
+# It is recommended to also modify your "taxio.pl" in the bin folder to specify path to the classifier, 
+# i.e., modify the variable $rdpbd in "taxio.pl".
+
+USEARCH installation:
+# obtain USERACH (v11) from http://www.drive5.com/usearch/download.html
+
+>>> chmod 755 usearch11.0.667_i86linux32
+>>> ln -s usearch11.0.667_i86linux32 usearch
+# add the folder containing usearch to $PATH
+
+
+2. Running TaxIO
+---------------------------------------------------------------------------------------------------------
+usage  : taxio.pl [options] forward_primer reverse_primer read1_file read2_file
+
+option : -reffa      <str> reference sequence in fasta format                            [rdpt16.fa]
+       : -reftt      <str> reference taxonomy tree file                                  [rdpt16.tt]
+       : -mrefid     <str> main reference ID                                             []
+       : -taxm       <str> taxonomy classification method                                [rdp,utax]
+       : -l1         <int> desired read 1 length                                         [300]
+       : -l2         <int> desired read 2 length                                         [300]
+       : -f1         <int> desired reference 1 length                                    [l1+50]
+       : -f2         <int> desired reference 2 length                                    [l2+50]
+       : -ioreffa    <str> existed inside-out reference                                  []
+       : -ma         <int> usearch taxonomy option: maximal accepts for usearch          [128]
+       : -mr         <int> usearch taxonomy option: maximal rejects for usearch          [128]
+       : -idmin      <flt> usearch taxonomy option: minimal identity for usearch         [0.84]
+       : -pidd       <flt> usearch taxonomy option: % identity difference from maximum   [0.5]
+       : -cpu        <int> number of threads                                             [2]
+       : -out        <str> name of output folder                                         [ref_read_taxm]
+       : -help             help
+---------------------------------------------------------------------------------------------------------
+
+TaxIO pipeline:
+TaxIO takes forward and reverse primer sequences and Illumina paired-end (PE) reads as input. It first 
+checks whether the corresponding inside-out (IO) reference already exists in the database. If not, the 
+IO reference is created. TaxIO then rearranges the PE reads into IO reads, and classifies the IO reads
+via comparing to the IO reference using either RDP classifier or USEARCH. 
+
+To run TaxIO on the sample data (1000 PEs), go to the test folder and issue the following commands. 
+Check next section for descriptions of the output.
+
+# classify sample data using RDP classifier
+# This takes about 50 seconds using two CPU cores.
+
+>>> ln -s ../data/rdpt16.fa
+>>> ln -s ../data/rdpt16.tt
+>>> taxio.pl -reffa rdpt16.fa -reftt rdpt16.tt AGAGTTTGATCCTGGCTCAG ATTACCGCGGCTGCTGG test_1.fq test_2.fq
+
+# If the inside-out reference is ready, it takes only 18 second.
+# Note that the reference options are skipped because they are available already. 
+
+>>> taxio.pl -out rdpt16_test_rdp_rerun -ioreffa rdpt16_test_rdp/ioref.fa AGAGTTTGATCCTGGCTCAG ATTACCGCGGCTGCTGG test_1.fq test_2.fq
+
+# classify sample PE reads trimmed to 200 bp and 150 bp respectively using USEARCH with eight CPU cores
+# This takes about 10 seconds using eight CPU cores, including time for constructing inside-out reference.
+
+>>> taxio.pl -cpu 8 -taxm utax -l1 250 -l2 150 -out rdpt16_testl250l150_utax AGAGTTTGATCCTGGCTCAG ATTACCGCGGCTGCTGG test_1.fq test_2.fq
+
+# TaxIO is designed to be modular, i.e., each step can be run separately as in the following example. 
+# This can be convenient when a user likes to classify additional data without reconstructing the IO 
+# reference. Results of the following commands should be identical to those generated above using 
+# RDP classifier except for the slightly different confidence scores due to the random nature. Note 
+# that the name of forward and reverse primers in the primer.fa should be "FP" and "RP".
+
+>>> CreateInsideOutReference.pl rdpt16.fa S002304466 AGAGTTTGATCCTGGCTCAG ATTACCGCGGCTGCTGG
+>>> CreateReferenceDatabase.pl -taxm rdp -reftt rdpt16.tt rdpt16.fa.S002304466.AGAGTTTGATCCTGGCTCAG.ATTACCGCGGCTGCTGG.l350l350.ioref.fa
+>>> ConstructInsideOutRead.pl test_1.fq test_2.fq > test.ioread.fq
+>>> ClassifyInsideOutRead.pl -taxm rdp rdpt16.fa.S002304466.AGAGTTTGATCCTGGCTCAG.ATTACCGCGGCTGCTGG.l350l350.ioref.fa test.ioread.fq
+
+
+3. Input and output
+---------------------------------------------------------------------------------------------------------
+For TaxIO to run successfully, the input and reference data should be in specific formats as described 
+below. With well formatted data, TaxIO generates an output folder to hold the intermediate files and 
+classification results, which are explained in the following.
+---------------------------------------------------------------------------------------------------------
+
+Required format of input
+
+Primer:
+The forward and reverse primer sequences should be on the plus and minus strands respectively.
+
+PE reads:
+TaxIO accepts PE reads in either fastq or fasta format. The first and second reads are expected to 
+begin with the forward and reverse primer sequence respectively.
+
+Reference data:
+TaxIO requires a reference sequence file and a taxonomy tree file for classification. By default,  
+the two files "rdpt16.fa" and "rdpt16.tt" in the data folder are used as reference, which are data
+of the RDP training set 16. It is possible to use reference data from another database, e.g., SILVA 
+or Greengenes. However, one has to spend effort on arranging the data into a correct format. 
+
+Main reference:
+To construct IO reference, one should specify a main reference for mapping base positions on each 
+reference sequence to coordinates on the main reference. A good main reference should contain a 
+unique site for both the forward and reverse primers. In addition, the more hanging bases outside 
+the amplicon the better. TaxIO provides a script to select main reference candidates, which are
+sorted by number of the hanging bases as follows. Sequences in the primer file should be on the 
+plus strand, and the names of the forward and reverse primers should contain an "F" and "R" 
+respectively. The output are in three columns: sequence ID, total number of hanging bases, and 
+numbers of hanging bases on the left/right. The default main references for "rdpt16.fa" and
+"rdp16swgv28nr97t16.fa" are S002304466 and S004444957 respectively.
+
+>>> PrioritizeReference.pl rdpt16.fa primer.fa > rdpt16_primer.pref
+
+Output files
+
+IO reference:
+An IO reference file is created based on three elements: reference sequence file, main reference,
+and forward and reverse primers. Therefore, it is named by those components, e.g., 
+"rdpt16.fa.S002304466.AGAGTTTGATCCTGGCTCAG.ATTACCGCGGCTGCTGG.l300l300.ioref.fa". The file is also 
+linked to "ioref.fa", which name is more succinct. 
+
+Retrained classifier:
+For classifying IO reads using RDP classifier, the classifier has to be retrained based on the IO 
+reference sequences. The retrain creates a directory, which is named by the IO reference, e.g., 
+"rdpt16.fa.S002304466.AGAGTTTGATCCTGGCTCAG.ATTACCGCGGCTGCTGG.l300l300.ioref.fa.retrained". The folder 
+is linked to "ioref.fa.retrained".
+
+USEARCH database:
+For classifying IO reads using USEARCH, a database will be created first based on the IO reference, 
+e.g., "rdpt16.fa.S002304466.AGAGTTTGATCCTGGCTCAG.ATTACCGCGGCTGCTGG.l300l300.ioref.fa.udb". The file 
+is linked to "ioref.fa.udb".
+
+IO reads:
+PE reads can be trimmed to the desired lengths and concatenated in an IO manner, which generates 
+*.ioread.fq/a. The IO reads can be further analyzed, e.g., subjected to OTU analysis. 
+
+Taxonomy annotations to IO reads:
+Classification results will be in "ioref.ioread.rdp" or "ioref.ioread.utax" when RDP classifier 
+or USEARCH is used for annotation. 
